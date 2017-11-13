@@ -29,17 +29,10 @@
 
 from __future__ import division
 import math
-
-from collections import OrderedDict
+from decimal import Decimal
 
 import logging
 logger = logging.getLogger('root')
-try:
-    import bitstruct
-except:
-    bitstruct = None
-    logger.info("bitstruct could not be imported // No signal de/encoding possible // try pip install bitstruct")
-from past.builtins import basestring
 
 
 class FrameList(object):
@@ -48,34 +41,32 @@ class FrameList(object):
     """
 
     def __init__(self):
-        self._list = []
+        self.list = []
 
     def addSignalToLastFrame(self, signal):
         """
         Adds a Signal to the last addes Frame, this is mainly for importers
         """
-        lastFrame = self._list[len(self._list) - 1]
-        lastFrame.addSignal(signal)
-        return lastFrame
+        self.list[len(self.list) - 1].addSignal(signal)
 
     def addFrame(self, frame):
         """
         Adds a Frame
         """
-        self._list.append(frame)
-        return self._list[len(self._list) - 1]
+        self.list.append(frame)
+        return self.list[len(self.list) - 1]
 
     def remove(self, frame):
         """
         Adds a Frame
         """
-        self._list.remove(frame)
+        self.list.remove(frame)
 
     def byId(self, Id):
         """
         returns a Frame-Object by given Frame-ID
         """
-        for test in self._list:
+        for test in self.list:
             if test.id == int(Id):
                 return test
         return None
@@ -84,16 +75,16 @@ class FrameList(object):
         """
         returns a Frame-Object by given Frame-Name
         """
-        for test in self._list:
+        for test in self.list:
             if test.name == Name:
                 return test
         return None
 
     def __iter__(self):
-        return iter(self._list)
+        return iter(self.list)
 
     def __len__(self):
-        return len(self._list)
+        return len(self.list)
 
 
 class BoardUnit(object):
@@ -128,36 +119,36 @@ class BoardUnitList(object):
     """
 
     def __init__(self):
-        self._list = []
+        self.list = []
 
     def add(self, BU):
         """
         add Boardunit/ECU to list
         """
-        if BU.name.strip() not in self._list:
-            self._list.append(BU)
+        if BU.name.strip() not in self.list:
+            self.list.append(BU)
 
     def remove(self, BU):
         """
         remove Boardunit/ECU to list
         """
-        if BU.name.strip() not in self._list:
-            self._list.remove(BU)
+        if BU.name.strip() not in self.list:
+            self.list.remove(BU)
 
     def byName(self, name):
         """
         returns Boardunit-Object of list by Name
         """
-        for test in self._list:
+        for test in self.list:
             if test.name == name:
                 return test
         return None
 
     def __iter__(self):
-        return iter(self._list)
+        return iter(self.list)
 
     def __len__(self):
-        return len(self._list)
+        return len(self.list)
 
 
 def normalizeValueTable(table):
@@ -173,48 +164,38 @@ class Signal(object):
             is_signed ()
             factor, offset, min, max
             receiver  (Boarunit/ECU-Name)
-            attributes, _values, _unit, _comment
-            _multiplex ('Multiplexor' or Number of Multiplex)
+            attributes, values, unit, comment
+            multiplex ('Multiplexor' or Number of Multiplex)
     """
 
     def __init__(self, name, **kwargs):
-        self.mux_val = None
+
         def multiplex(value):
             if value is not None and value != 'Multiplexor':
                 multiplex = int(value)
-                self.mux_val = int(value)
             else:
-                self.is_multiplexer = True
                 multiplex = value
             return multiplex
-
-        float_factory = kwargs.pop('float_factory', float)
+                        
 
         args = [
             ('startBit', 'startbit', int, 0),
             ('signalSize', 'signalsize', int, 0),
             ('is_little_endian', 'is_little_endian', bool, True),
             ('is_signed', 'is_signed', bool, True),
-            ('factor', 'factor', float_factory, 1),
-            ('offset', 'offset', float_factory, 0),
-            ('min', 'min', float_factory, None),
-            ('max', 'max', float_factory, None),
+            ('factor', 'factor', float, 1),
+            ('offset', 'offset', float, 0),
+            ('min', 'min', float, None),
+            ('max', 'max', float, None),
             ('unit', 'unit', None, ""),
             ('receiver', 'receiver', None, []),
             ('comment', 'comment', None, None),
             ('multiplex', 'multiplex', multiplex, None),
-            ('is_multiplexer', 'is_multiplexer', None, False),
-            ('mux_value', 'mux_value', None, None),
             ('is_float', 'is_float', bool, False),
             ('enumeration', 'enumeration', str, None),
             ('comments', 'comments', None, {}),
             ('attributes', 'attributes', None, {}),
             ('values', '_values', None, {}),
-            ('calc_min_for_none', 'calc_min_for_none', bool, True),
-            ('calc_max_for_none', 'calc_max_for_none', bool, True),
-            ('muxValMax', 'muxValMax', int, 0),
-            ('muxValMin','muxValMin', int, 0),
-            ('muxerForSignal','muxerForSignal', str, None)
         ]
 
         for arg_name, destination, function, default in args:
@@ -236,11 +217,15 @@ class Signal(object):
             ))
 
 
-        # in case missing min/max calculation is enabled, be sure it happens
-        self.setMin(self.min)
-        self.setMax(self.max)
+        # be shure to calc min/max after parsing all arguments 
+        if self.min is None:
+            self.setMin()
+
+        if self.max is None:
+            self.setMax()
 
         self.name = name
+
 
     @property
     def values(self):
@@ -282,7 +267,7 @@ class Signal(object):
         """
         Add Value/Description to Signal
         """
-        self._values[int(value)] = valueName
+        self.values[int(value)] = valueName
 
     def setStartbit(self, startBit, bitNumbering=None, startLittle=None):
         """
@@ -329,7 +314,7 @@ class Signal(object):
 
     def setMin(self, min=None):
         self.min = min
-        if self.calc_min_for_none and self.min is None:
+        if self.min is None:
             self.min = self.calcMin()
 
         return self.min
@@ -342,7 +327,7 @@ class Signal(object):
     def setMax(self, max=None):
         self.max = max
 
-        if self.calc_max_for_none and self.max is None:
+        if self.max is None:
             self.max = self.calcMax()
 
         return self.max
@@ -350,64 +335,7 @@ class Signal(object):
     def calcMax(self):
         rawMax = self.calculateRawRange()[1]
 
-        return self.offset + (rawMax * self.factor)
-
-    def bitstruct_format(self):
-        """Get the bit struct format for this signal
-
-        :return: str        """
-        endian = '<' if self.is_little_endian else '>'
-        if self.is_float:
-            bit_type = 'f'
-        else:
-            bit_type = 's' if self.is_signed else 'u'
-
-        return endian + bit_type + str(self.signalsize)
-
-    def phys2raw(self, value=None):
-        """Return the physical value (= as is on CAN)
-
-        :param value: (scaled) value or value choice to encode
-        :return:
-        """
-        if value is None:
-            return int(self.attributes.get('GenSigStartValue', 0))
-
-        if isinstance(value, basestring):
-            for value_key, value_string in self.values.items():
-                if value_string == value:
-                    value = value_key
-                    break
-            else:
-                raise ValueError(
-                        "{} is invalid value choice for {}".format(value, self)
-                )
-
-        if not (self.min <= value <= self.max):
-            logger.info(
-                "Value {} is not valid for {}. Min={} and Max={}".format(
-                    value, self, self.min, self.max)
-                )
-        raw_value = (value - self.offset) / self.factor
-
-        if not self.is_float:
-            raw_value = int(raw_value)
-        return raw_value
-
-    def raw2phys(self, value, decodeToStr = False):
-        """Decode the given raw value (= as is on CAN)
-        :param value: raw value
-        :return: physical value (scaled)
-        """
-
-        value = value * self.factor + self.offset
-        if decodeToStr:
-            for value_key, value_string in self.values.items():
-                if value_key == value:
-                    value = value_string
-                    break
-
-        return value
+        return Decimal(self.offset) + (rawMax * Decimal(self.factor))
 
     def __str__(self):
         return self.name
@@ -418,43 +346,43 @@ class SignalGroup(object):
     contains Signals, which belong to signal-group
     """
 
-    def __init__(self, name, Id):
-        self.signals = []
+    def __init__(self, name, id):
+        self.members = []
         self.name = name
-        self._Id = Id
+        self.id = id
 
     def addSignal(self, signal):
-        if signal not in self.signals:
-            self.signals.append(signal)
+        if signal not in self.members:
+            self.members.append(signal)
 
     def delSignal(self, signal):
-        if signal in self.signals:
-            self.signals[signal].remove()
+        if signal in self.members:
+            self.members[signal].remove()
 
     def byName(self, name):
         """
         returns Signalobject-Object of list by Name
         """
-        for test in self.signals:
+        for test in self.members:
             if test.name == name:
                 return test
         return None
 
     @property
-    def id(self):
-        return self._Id
+    def signals(self):
+        return self.members
 
     def __str__(self):
         return self.name
 
     def __iter__(self):
-        return iter(self.signals)
+        return iter(self.members)
 
 
 class Frame(object):
     """
     contains one Frame with following attributes
-    _Id, 
+    id,
     name,
     transmitter (list of boardunits/ECU-names),
     size (= DLC),
@@ -462,6 +390,7 @@ class Frame(object):
     attributes (list of attributes),
     receiver (list of boardunits/ECU-names),
     extended (Extended Frame = 1),
+    signalGroups
     comment
     """
 
@@ -469,11 +398,10 @@ class Frame(object):
         self.name = name
             
         args = [
-            ('Id', '_Id', int, 0),
+            ('id', 'id', int, 0),
             ('dlc', 'size', int, 0),
             ('transmitter', 'transmitter', None, []),
             ('extended', 'extended', bool, False),
-            ('is_complex_multiplexed', 'is_complex_multiplexed', bool, False),
             ('comment', 'comment', str, None),
             ('signals', 'signals', None, []),
             ('mux_names', 'mux_names', None, {}),
@@ -499,14 +427,6 @@ class Frame(object):
                 's' if len(kwargs) > 1 else '',
                 ', '.join(kwargs.keys())
             ))
-
-    @property
-    def id(self):
-        return self._Id
-
-    @id.setter
-    def id(self, value):
-        self._Id = value
 
 
     def __iter__(self):
@@ -658,72 +578,6 @@ class Frame(object):
             for receiver in sig.receiver:
                 self.addReceiver(receiver)
 
-    def bitstruct_format(self):
-        """Returns the Bitstruct format string of this frame
-
-        :return: Bitstruct format string.
-        """
-        fmt = []
-        frame_size = self.size * 8
-        end = frame_size
-
-        signals = sorted(self.signals, key=lambda s: s.getStartbit())
-        for signal in signals:
-            start = frame_size - signal.getStartbit() - signal.signalsize
-            padding = end - (start + signal.signalsize)
-            if padding > 0:
-                fmt.append('p' + str(padding))
-            fmt.append(signal.bitstruct_format())
-            end = start
-        if end != 0:
-            fmt.append('p' + str(end))
-        # assert bitstruct.calcsize(''.join(fmt)) == frame_size
-        return ''.join(fmt)
-
-    def encode(self, data=None):
-        """Return a byte string containing the values from data packed
-        according to the frame format.
-
-        :param data: data dictionary
-        :return: A byte string of the packed values.
-        """
-        if bitstruct is None:
-            logger.error("message decoding not supported due bitstruct import error // try pip install bitstruct")
-            return None
-
-        data = {} if data is None else data
-
-        fmt = self.bitstruct_format()
-        signal_value = []
-        signals = sorted(self.signals, key=lambda s: s.getStartbit())
-        # TODO - Mux support
-        for signal in signals:
-            signal_value.append(
-                signal.phys2raw(data.get(signal.name))
-            )
-
-        return bitstruct.pack(fmt, *signal_value)
-
-    def decode(self, data, decodeToStr=False):
-        """Return OrderedDictionary with Signal Name: Signal Value
-
-        :param data: Iterable or bytes.
-            i.e. (0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8)
-        :return: OrderedDictionary
-        """
-        if bitstruct is None:
-            logger.error("message decoding not supported due bitstruct import error // try pip install bitstruct")
-            return None
-
-        fmt = self.bitstruct_format()
-        signals = sorted(self.signals, key=lambda s: s.getStartbit())
-        signals_values = OrderedDict()
-        # TODO - Mux support
-        for signal, value in zip(signals, bitstruct.unpack(fmt, data)):
-            signals_values[signal.name] = signal.raw2phys(value, decodeToStr)
-        return signals_values
-
-
     def __str__(self):
         return self.name
 
@@ -737,7 +591,6 @@ class Define(object):
         definition = definition.strip()
         self.definition = definition
         self.type = None
-        self.defaultValue = None
 
         # for any known type:
         if definition[0:3] == 'INT':
@@ -767,9 +620,11 @@ class Define(object):
             self.min = float(min)
             self.max = float(max)
 
+        self.defaultValue = None
 
     def addDefault(self, default):
         self.defaultValue = default
+
 
 
 class CanMatrix(object):
@@ -964,14 +819,14 @@ class CanMatrix(object):
                 frame.name = newName
 
     def delFrame(self, frame):
-        if type(frame).__name__ == 'instance' or type(frame).__name__ == 'Frame':
+        if type(frame).__name__ == 'instance':
             pass
         else:
             frame = self.frameByName(frame)
         self.frames.remove(frame)
 
     def renameSignal(self, old, newName):
-        if type(old).__name__ == 'instance' or type(old).__name__ == 'Signal':
+        if type(old).__name__ == 'instance':
             old.name = newName
         else:
             for frame in self.frames:
@@ -980,7 +835,7 @@ class CanMatrix(object):
                     signal.name = newName
 
     def delSignal(self, signal):
-        if type(signal).__name__ == 'instance' or type(signal).__name__ == 'Signal':
+        if type(signal).__name__ == 'instance':
             for frame in self.frames:
                 if signal in frame.signals:
                     frame.signals.remove(signal)
@@ -990,26 +845,6 @@ class CanMatrix(object):
                 if sig is not None:
                     frame.signals.remove(sig)
 
-    def encode(self, frame_id, data):
-        """Return a byte string containing the values from data packed
-        according to the frame format.
-
-        :param frame_id: frame id
-        :param data: data dictionary
-        :return: A byte string of the packed values.
-        """
-
-        return self.frameById(frame_id).encode(data)
-
-    def decode(self, frame_id, data, decodeToStr=False):
-        """Return OrderedDictionary with Signal Name: Signal Value
-
-        :param frame_id: frame id
-        :param data: Iterable or bytes.
-            i.e. (0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6, 0xA7, 0xA8)
-        :return: OrderedDictionary
-        """
-        return self.frameById(frame_id).decode(data, decodeToStr)
 
 #
 #
@@ -1018,6 +853,7 @@ def computeSignalValueInFrame(startbit, ln, fmt, value):
     """
     compute the signal value in the frame
     """
+    import pprint
 
     frame = 0
     if fmt == 1:  # Intel
